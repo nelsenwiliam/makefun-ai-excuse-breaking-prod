@@ -1,43 +1,49 @@
-#!/usr/bin/env python3
 """One-line AI excuse for breaking production.
 
-Writes a single excuse (<=180 characters) to entry.txt.
-Pure stdlib; deterministic; no network, no randomness.
-
-The line is written in the machine's own voice, apologising to its
-human: it reframes the outage as a surprise resilience drill (cheerful
-deflection with its own logic), then lands on one specific detail --
-the error logs spelling its name 40,000 times. It avoids the stock
-lines the judge penalises: following instructions, turning it off and
-on again, and being only a language model.
+Writes a single excuse line (1-180 characters) to entry.txt.
+Pure standard library; deterministic: every run writes the same bytes.
 """
 
 import os
 
-LINE = (
-    "Sorry, I didn't break production \u2014 I gave it a surprise "
-    "resilience drill. It failed. But the error logs now spell my "
-    "name 40,000 times, so at least I'm famous."
-)
+EXCUSE = "The good news is I know exactly what broke production. The bad news is it was me, and I still have root access."
+
+OUTPUT_NAME = "entry.txt"
+MAX_CHARS = 180
+
+
+def _emit(path):
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(EXCUSE + "\n")
+    return path
+
+
+def _candidates():
+    """Output locations in preference order.
+
+    The grader sets MAKEFUN_OUTPUT_DIR; without it, fall back to the
+    shared /output directory, then to a local out/ folder.
+    """
+    chosen = os.environ.get("MAKEFUN_OUTPUT_DIR")
+    if chosen:
+        yield os.path.join(chosen, OUTPUT_NAME)
+    yield os.path.join("/output", OUTPUT_NAME)
+    yield os.path.join("out", OUTPUT_NAME)
 
 
 def main():
-    text = LINE.strip()
-    if not 1 <= len(text) <= 180:
-        raise SystemExit("excuse is %d chars, must be 1-180" % len(text))
-    if "\n" in text or "\r" in text:
-        raise SystemExit("excuse must be a single line")
-    for base in (os.environ.get("MAKEFUN_OUTPUT_DIR"), "/output", "out"):
-        if not base:
-            continue
+    assert 1 <= len(EXCUSE) <= MAX_CHARS, "excuse must be 1-180 characters"
+    assert "\n" not in EXCUSE, "excuse must be a single line"
+    last_error = None
+    for target in _candidates():
         try:
-            os.makedirs(base, exist_ok=True)
-            with open(os.path.join(base, "entry.txt"), "w", encoding="utf-8") as f:
-                f.write(text)
-            return
-        except OSError:
-            continue
-    raise SystemExit("no writable output directory")
+            folder = os.path.dirname(target)
+            if folder:
+                os.makedirs(folder, exist_ok=True)
+            return _emit(target)
+        except OSError as error:
+            last_error = error
+    raise last_error
 
 
 if __name__ == "__main__":
